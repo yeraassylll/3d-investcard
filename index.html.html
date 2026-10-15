@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>3D инвест-карта Павлодарской области</title>
+<style>
+:root{--bg:#f4f5f2;--fg:#1d2420;--mut:#5d675f;--card:#ffffff;--bd:#d6dad3;--acc:#185FA5;--up:#1D9E75;--dn:#D85A30;--gold:#C9962B;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161a17;--fg:#e9ece7;--mut:#9aa59c;--card:#222823;--bd:#38403a;--acc:#6aa9e6}}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;overflow:hidden}
+header{padding:8px 12px 4px}h1{font-size:16px;margin:0}small{color:var(--mut)}
+.row{display:flex;gap:6px;flex-wrap:wrap;padding:3px 12px}
+button{font:inherit;border:1px solid var(--bd);background:var(--card);color:var(--fg);border-radius:8px;padding:5px 10px;cursor:pointer}
+button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+#wrap{position:relative;flex:1;min-height:200px;touch-action:none}
+canvas{display:block;width:100%;height:100%}
+.lb{position:absolute;transform:translate(-50%,-100%);font-size:11px;white-space:nowrap;pointer-events:none;background:color-mix(in srgb,var(--card) 85%,transparent);border-radius:4px;padding:1px 4px}
+.lb.p{color:var(--gold);font-weight:600}
+#info{background:var(--card);border-top:1px solid var(--bd);padding:8px 12px;max-height:34%;overflow:auto}
+#info b{font-size:15px}table{border-collapse:collapse;width:100%;margin-top:4px}td,th{padding:2px 4px;text-align:right;font-size:12px}td:first-child,th:first-child{text-align:left}
+.up{color:var(--up)}.dn{color:var(--dn)}
+</style></head><body>
+<header><h1>Инвест-карта: 3D-сравнение регионов Казахстана</h1><small>Высота столбца = значение показателя за выбранный год. Цвет = динамика 2022→2025. Перетащите — вращать, щипок/колесо — масштаб.</small></header>
+<div class="row" id="ind"></div>
+<div class="row" id="yr"></div>
+<div class="row"><button id="tp" class="on">★ Перспективные проекты</button><button id="rs">Сброс вида</button></div>
+<div id="wrap"></div>
+<div id="info">Нажмите на столбец региона или на золотую метку проекта.</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const Y=[2022,2023,2024,2025];
+const R=[["Павлодарская",76.97,52.29],["Карагандинская",73.1,49.8],["ВКО",82.6,49.95],["Костанайская",63.6,53.2],["Алматинская",78.4,45.0],["г. Астана",71.43,51.17],["г. Алматы",76.9,43.25]];
+const D={
+gdp:{n:"ВРП",u:"млн тенге",pp:0,v:[[4296923.7,4371041.7,5150822.2,6357587.1],[7278059.2,7711828.2,9059477.4,10367346.2],[3916818.1,4459056.1,5035142.0,5846091.3],[4182077.8,4436361.1,4969559.1,6080972.0],[4267665.3,5322132.0,6040608.6,6792939.5],[10672480.5,12960836.0,15051922.0,19593327.4],[19154536.7,25229706.8,31294466.7,36195760.9]],c:[48.0,42.4,49.3,45.4,59.2,83.6,89.0]},
+inv:{n:"Инвестиции в основной капитал",u:"тыс. тенге",pp:0,v:[[742793468,797474875,839747433,1234428720],[724917845,876522542,1456700866,1602370900],[555270644,648603766,773934927,882285800],[492069660,561627131,640216190,750050000],[613940487,737743410,1017661274,1150432000],[1462523930,1655031985,1992816598,2351523000],[1407989996,1803183330,2069933449,2420540000]],c:[66.2,121.0,58.9,52.4,87.4,60.8,71.9]},
+sal:{n:"Средняя зарплата",u:"тыс. тенге",pp:0,v:[[273.5,330.1,372.6,421.0],[283.8,338.5,380.9,430.4],[287.1,339.9,380.3,425.9],[250.9,302.6,343.8,391.9],[261.2,295.1,328.5,371.2],[406.9,480.4,538.0,607.9],[354.9,426.3,490.9,554.7]],c:[53.9,51.7,48.3,56.2,42.1,49.4,56.3]},
+une:{n:"Безработица",u:"%",pp:1,inv:1,v:[[4.8,4.8,4.7,4.6],[4.4,4.1,4.1,4.0],[4.7,4.6,4.6,4.5],[4.9,4.8,4.7,4.6],[4.7,4.7,4.6,4.5],[4.6,4.5,4.4,4.3],[5.0,4.8,4.6,4.5]],c:[-0.2,-0.4,-0.2,-0.3,-0.2,-0.3,-0.5]},
+exp:{n:"Экспорт",u:"тыс. долл. США",pp:0,v:[[3384809,2793720,2997344,3154200],[4862147,1463775,1449513,1520800],[2859128,2533355,2158495,2245100],[1234647,1120872,1017473,1098500],[307386,405174,448073,485600],[7654384,7940859,9002478,10154300],[3940113,3936113,3663777,3850200]],c:[-6.8,-68.7,-21.5,-11.0,58.0,32.7,-2.3]},
+pow:{n:"Производство электроэнергии",u:"млн кВт·ч",pp:0,v:[[46743.5,48321.3,48345.4,48512.8],[11835.4,12209.8,12213.6,12450.2],[7047.6,6323.0,7643.4,7810.5],[1979.1,1087.0,1354.7,1420.3],[1066.9,6782.9,7161.3,7540.1],null,null],c:[3.8,5.2,10.8,-28.2,606.7,null,null]}};
+const P=[
+{n:"Индустриальный парк XINFA",x:77.4,z:52.6,d:"Алюминиевый кластер полного цикла. ~15 млрд долл. США. Точная площадка уточняется."},
+{n:"Энергоблоки №3–4 ГРЭС-2",x:75.0,z:51.9,d:"Экибастуз. +1 100 МВт, ликвидация прогнозируемого дефицита электроэнергии."},
+{n:"Долина ЦОД и ИИ-дата-центр",x:75.6,z:51.55,d:"Экибастуз. До 1 ГВт. Диверсификация: из угольного узла в цифровой хаб."},
+{n:"Ферросплавный завод Ekibastuz FerroAlloys",x:75.9,z:51.95,d:"ТОО EkibastuzFerroAlloys. 8 печей, до 160 тыс. т ферросилиция в год, экспорт."},
+{n:"Установка алкилата на ПНХЗ",x:76.6,z:52.2,d:"Павлодарский НХЗ. 35,5 млрд тенге. Топливо стандарта Евро-5/6, меньше импортных присадок."}];
+let ind="gdp",yi=3,sel=null;
+const fmt=n=>n.toLocaleString("ru-RU",{maximumFractionDigits:1});
+const good=(k,c)=>D[k].inv?c<0:c>0;
+const wrap=document.getElementById("wrap");
+const ren=new THREE.WebGLRenderer({antialias:true,alpha:true});ren.setPixelRatio(Math.min(devicePixelRatio,2));wrap.appendChild(ren.domElement);
+const sc=new THREE.Scene(),cam=new THREE.PerspectiveCamera(45,1,.1,200);
+sc.add(new THREE.AmbientLight(0xffffff,.75));const dl=new THREE.DirectionalLight(0xffffff,.7);dl.position.set(8,20,10);sc.add(dl);
+const X=l=>(l-67)*.67,Z=a=>-(a-48);
+// схематичный контур Казахстана
+const O=[[46.5,49],[50,51.7],[55,50.7],[61,51],[60.5,54],[69,55.4],[75,54],[80,50.8],[87,49],[85,47],[83,45],[80.2,42.2],[74,43],[70,41],[66,43],[62,43.5],[58,45],[56,41.5],[53,42],[52,45],[53,47],[49,46.5]];
+const sh=new THREE.Shape(O.map(p=>new THREE.Vector2(X(p[0]),-Z(p[1]))));
+const g=new THREE.Mesh(new THREE.ShapeGeometry(sh),new THREE.MeshLambertMaterial({color:0xcfd8c8,side:2}));g.rotation.x=-Math.PI/2;sc.add(g);
+const ln=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(O.map(p=>new THREE.Vector3(X(p[0]),.02,Z(p[1])))),new THREE.LineBasicMaterial({color:0x6b7a6a}));sc.add(ln);
+const bars=R.map((r,i)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshLambertMaterial({color:0x888888}));m.position.set(X(r[1]),0,Z(r[2]));m.userData={i};m.scale.set(i==0?1.3:1,.01,i==0?1.3:1);sc.add(m);return m});
+const lbc=document.createElement("div");wrap.appendChild(lbc);
+const lab=(t,c)=>{const e=document.createElement("div");e.className="lb "+(c||"");e.textContent=t;lbc.appendChild(e);return e};
+const rl=R.map(r=>lab(r[0]));
+const pm=P.map((p,i)=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(.08,.08,3.2,8),new THREE.MeshLambertMaterial({color:0xC9962B}));m.position.set(X(p.x),1.6,Z(p.z));m.userData={p:i};const s=new THREE.Mesh(new THREE.OctahedronGeometry(.28),new THREE.MeshLambertMaterial({color:0xE8B93C}));s.position.y=1.8;m.add(s);sc.add(m);return m});
+const pl=P.map((p,i)=>lab("★ "+(i+1),"p"));
+const tgt=[0,0,0];let th=.5,ph=.95,di=26;
+function cp(){cam.position.set(di*Math.sin(ph)*Math.sin(th),di*Math.cos(ph),di*Math.sin(ph)*Math.cos(th));cam.lookAt(0,0,0)}
+function size(){const w=wrap.clientWidth,h=wrap.clientHeight;ren.setSize(w,h);cam.aspect=w/h;cam.updateProjectionMatrix()}
+addEventListener("resize",size);
+const ptr=new Map();let moved=0,pd=0;
+const el=ren.domElement;
+el.addEventListener("pointerdown",e=>{el.setPointerCapture(e.pointerId);ptr.set(e.pointerId,[e.clientX,e.clientY]);moved=0;pd=0});
+el.addEventListener("pointermove",e=>{if(!ptr.has(e.pointerId))return;const o=ptr.get(e.pointerId);
+ if(ptr.size==2){const a=[...ptr.values()];const d0=Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1]);ptr.set(e.pointerId,[e.clientX,e.clientY]);const b=[...ptr.values()];const d1=Math.hypot(b[0][0]-b[1][0],b[0][1]-b[1][1]);di=Math.max(8,Math.min(45,di*d0/d1));moved=9;}
+ else{th-=(e.clientX-o[0])*.006;ph=Math.max(.2,Math.min(1.45,ph-(e.clientY-o[1])*.006));moved+=Math.abs(e.clientX-o[0])+Math.abs(e.clientY-o[1]);ptr.set(e.pointerId,[e.clientX,e.clientY])}cp()});
+el.addEventListener("pointerup",e=>{ptr.delete(e.pointerId);if(moved<6)pick(e)});
+el.addEventListener("wheel",e=>{e.preventDefault();di=Math.max(8,Math.min(45,di*(1+e.deltaY*.001)));cp()},{passive:false});
+const rc=new THREE.Raycaster();
+function pick(e){const b=el.getBoundingClientRect();rc.setFromCamera({x:(e.clientX-b.left)/b.width*2-1,y:-(e.clientY-b.top)/b.height*2+1},cam);
+ const h=rc.intersectObjects([...bars,...pm],true)[0];if(!h){return}
+ let o=h.object;while(o&&!o.userData.hasOwnProperty("i")&&!o.userData.hasOwnProperty("p"))o=o.parent;
+ if(o.userData.p!==undefined)showP(o.userData.p);else{sel=o.userData.i;showR()}}
+function mx(k){let m=0;D[k].v.forEach(v=>v&&v.forEach(x=>m=Math.max(m,x)));return m}
+let tH=[];function setT(){const m=mx(ind);tH=D[ind].v.map(v=>v?v[yi]/m*8:.05);
+ bars.forEach((b,i)=>{const c=D[ind].c[i];const m2=b.material;m2.color.set(c==null?0x999999:good(ind,c)?0x1D9E75:0xD85A30);if(i==0)m2.emissive.set(0x222244);});}
+function showR(){if(sel==null)return;const d=D[ind],v=d.v[sel],c=d.c[sel];
+ let h=`<b>${R[sel][0]}</b> — ${d.n}, ${d.u}`;
+ if(!v)return document.getElementById("info").innerHTML=h+"<br><small>Данных по электроэнергии нет (в работе принят средний балл 0,5).</small>";
+ h+=`<table><tr>${Y.map(y=>`<th>${y}</th>`).join("")}<th>2025/2022</th></tr><tr>${v.map(x=>`<td>${fmt(x)}</td>`).join("")}<td class="${good(ind,c)?"up":"dn"}">${c>0?"+":""}${fmt(c)}${d.pp?" п.п.":" %"}</td></tr></table>`;
+ document.getElementById("info").innerHTML=h}
+function showP(i){document.getElementById("info").innerHTML=`<b>★ ${i+1}. ${P[i].n}</b><br>${P[i].d}`}
+function btns(id,items,fn,cur){const c=document.getElementById(id);items.forEach(([k,t])=>{const b=document.createElement("button");b.textContent=t;b.className=k==cur?"on":"";b.onclick=()=>{[...c.children].forEach(x=>x.className="");b.className="on";fn(k)};c.appendChild(b)})}
+btns("ind",Object.entries(D).map(([k,v])=>[k,v.n.replace("Инвестиции в основной капитал","Инвестиции").replace("Производство электроэнергии","Электроэнергия")]),k=>{ind=k;setT();showR()},"gdp");
+btns("yr",Y.map((y,i)=>[i,String(y)]),k=>{yi=+k;setT()},3);
+document.getElementById("tp").onclick=function(){showP_=!showP_;this.className=showP_?"on":"";pm.forEach(m=>m.visible=showP_);pl.forEach(l=>l.style.display=showP_?"":"none")};
+let showP_=true;
+document.getElementById("rs").onclick=()=>{th=.5;ph=.95;di=26;cp()};
+const v3=new THREE.Vector3();
+function place(e,x,y,z){v3.set(x,y,z).project(cam);e.style.left=(v3.x*.5+.5)*wrap.clientWidth+"px";e.style.top=(-v3.y*.5+.5)*wrap.clientHeight+"px"}
+function loop(){requestAnimationFrame(loop);
+ bars.forEach((b,i)=>{const h=b.scale.y+(tH[i]-b.scale.y)*.12;b.scale.y=h;b.position.y=h/2;place(rl[i],b.position.x,h+.2,b.position.z)});
+ pm.forEach((m,i)=>{m.children[0].rotation.y+=.03;place(pl[i],m.position.x,3.6,m.position.z)});
+ ren.render(sc,cam)}
+size();cp();setT();loop();
+</script></body></html>
